@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Ledger — Personal expense log, budget overview, and debt payoff planner." />
+  <title>Ledger — Expense log</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,520;9..144,640&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="mark" aria-hidden="true">L</span>
+        <div>
+          <p class="eyebrow">Financial planner</p>
+          <h1>Ledger</h1>
+        </div>
+      </div>
+      <button class="primary" type="button" data-action="add-transaction">Add entry</button>
+      <nav class="nav" aria-label="Sections">
+        <button type="button" data-action="view" data-view="log">Expenses</button>
+        <button type="button" data-action="view" data-view="overview">Overview</button>
+        <button type="button" data-action="view" data-view="debts">Debts</button>
+        <button type="button" data-action="view" data-view="categories">Categories</button>
+      </nav>
+    </header>
+    <main id="main"></main>
+  </div>
+  <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+  <noscript><p class="noscript">Turn on JavaScript to use this expense log.</p></noscript>
+  <script src="app.js"></script>
+</body>
+</html>
