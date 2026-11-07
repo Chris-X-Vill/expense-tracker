@@ -1,0 +1,17 @@
+{
+  "name": "Ledger — Expense Log",
+  "short_name": "Ledger",
+  "description": "Personal expense log, budget overview, and debt payoff planner.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#efe4d4",
+  "theme_color": "#efe4d4",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%231c1916'/%3E%3Ctext x='90' y='122' text-anchor='middle' font-family='Georgia, serif' font-size='104' fill='%23f6f1e8'%3EL%3C/text%3E%3C/svg%3E",
+      "sizes": "180x180",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

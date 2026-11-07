@@ -106,7 +106,7 @@ h1 {
 .app {
   width: min(1120px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 28px 0 72px;
+  padding: calc(28px + env(safe-area-inset-top, 0px)) env(safe-area-inset-right, 0px) calc(72px + env(safe-area-inset-bottom, 0px)) env(safe-area-inset-left, 0px);
 }
 
 .topbar {
