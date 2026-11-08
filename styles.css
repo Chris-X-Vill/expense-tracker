@@ -1,13 +1,18 @@
 /* ==========================================================================
-   Design Tokens & Reset
+   Design Tokens & Reset (Light + Dark Mode)
    ========================================================================== */
 :root {
   --paper: #f3eee6;
   --wash: #efe4d4;
   --ink: #1c1916;
+  --ink-inv: #f7f3ec;
   --muted: #6f675e;
   --line: #e0d6c8;
   --card: #fffdf9;
+  --card-border: rgba(28, 25, 22, 0.06);
+  --input-bg: #ffffff;
+  --track: #efe7db;
+  --bar-idle: #d9c8ae;
   --green: #1b6846;
   --green-soft: #e6f3ec;
   --red: #8d3b32;
@@ -16,6 +21,27 @@
   --serif: "Fraunces", Georgia, "Times New Roman", serif;
   --sans: "Outfit", "Segoe UI", sans-serif;
   --radius: 18px;
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --paper: #141210;
+  --wash: #1c1916;
+  --ink: #f3eee6;
+  --ink-inv: #181512;
+  --muted: #a3988c;
+  --line: #302b26;
+  --card: #1f1c18;
+  --card-border: rgba(243, 238, 230, 0.08);
+  --input-bg: #161411;
+  --track: #2b2621;
+  --bar-idle: #3a332c;
+  --green: #38a875;
+  --green-soft: rgba(56, 168, 117, 0.16);
+  --red: #e06d60;
+  --red-soft: rgba(224, 109, 96, 0.16);
+  --shadow: 0 1px 0 rgba(0, 0, 0, 0.3), 0 16px 40px rgba(0, 0, 0, 0.32);
+  color-scheme: dark;
 }
 
 * {
@@ -34,7 +60,7 @@ body {
   font-size: 16px;
   line-height: 1.45;
   background: linear-gradient(180deg, var(--wash) 0%, var(--paper) 320px);
-  color-scheme: light;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
 button,
@@ -117,6 +143,44 @@ h1 {
   margin-bottom: 22px;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.theme-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card);
+}
+
+.theme-btn {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.theme-btn:hover {
+  color: var(--ink);
+}
+
+.theme-btn[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--ink-inv);
+}
+
 .brand {
   display: flex;
   gap: 12px;
@@ -130,7 +194,7 @@ h1 {
   place-items: center;
   border-radius: 13px;
   background: var(--ink);
-  color: #f6f1e8;
+  color: var(--ink-inv);
   font-family: var(--serif);
   font-size: 24px;
 }
@@ -202,7 +266,7 @@ h1 {
 .seg button[aria-pressed="true"],
 .filters button[aria-pressed="true"] {
   background: var(--ink);
-  color: #f7f3ec;
+  color: var(--ink-inv);
   border-color: var(--ink);
 }
 
@@ -247,6 +311,7 @@ h1 {
 .seg {
   display: flex;
   gap: 4px;
+  flex-wrap: wrap;
 }
 
 .seg.full {
@@ -281,7 +346,8 @@ h1 {
 .field textarea {
   width: 100%;
   border: 1px solid var(--line);
-  background: #ffffff;
+  background: var(--input-bg);
+  color: var(--ink);
   border-radius: 12px;
   padding: 10px 12px;
 }
@@ -303,7 +369,7 @@ h1 {
 .stat,
 .card {
   background: var(--card);
-  border: 1px solid rgba(28, 25, 22, 0.06);
+  border: 1px solid var(--card-border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
@@ -402,7 +468,7 @@ h1 {
 .bar {
   width: min(100%, 14px);
   border-radius: 999px 999px 2px 2px;
-  background: #d9c8ae;
+  background: var(--bar-idle);
 }
 
 .bar.has {
@@ -422,7 +488,7 @@ h1 {
   grid-column: 1 / -1;
   height: 7px;
   border-radius: 99px;
-  background: #efe7db;
+  background: var(--track);
   overflow: hidden;
 }
 
@@ -436,7 +502,7 @@ h1 {
 .progress {
   height: 10px;
   border-radius: 99px;
-  background: #efe7db;
+  background: var(--track);
   overflow: hidden;
   margin: 10px 0;
 }
@@ -449,7 +515,7 @@ h1 {
 }
 
 /* ==========================================================================
-   Transactions, Categories & Debts
+   Transactions, Categories, Recurring Badges & Debts
    ========================================================================== */
 .cat-row,
 .tx,
@@ -485,6 +551,20 @@ h1 {
 
 .tx-title {
   font-weight: 560;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.badge-pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--green-soft);
+  color: var(--green);
 }
 
 .tx-side {
@@ -553,19 +633,89 @@ h1 {
 }
 
 /* ==========================================================================
+   Streak View
+   ========================================================================== */
+.streak-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.streak-weekday {
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.streak-day {
+  aspect-ratio: 1;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--track);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--muted);
+  position: relative;
+}
+
+.streak-day.active {
+  background: var(--green);
+  border-color: var(--green);
+  color: #f4fff8;
+  font-weight: 600;
+}
+
+.streak-day.today {
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.milestone-list {
+  display: grid;
+  gap: 10px;
+}
+
+.milestone {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--track);
+  opacity: 0.65;
+}
+
+.milestone.unlocked {
+  opacity: 1;
+  border-color: var(--green);
+  background: var(--green-soft);
+}
+
+.milestone strong {
+  font-family: var(--serif);
+}
+
+/* ==========================================================================
    Modal Dialogs & Forms
    ========================================================================== */
 dialog {
   width: min(480px, calc(100vw - 28px));
-  border: 0;
+  border: 1px solid var(--card-border);
   border-radius: 20px;
   padding: 0;
   background: var(--card);
-  box-shadow: 0 24px 80px rgba(28, 25, 22, 0.24);
+  color: var(--ink);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
 }
 
 dialog::backdrop {
-  background: rgba(28, 25, 22, 0.48);
+  background: rgba(15, 13, 11, 0.56);
 }
 
 .dialog-body {
@@ -615,7 +765,7 @@ dialog::backdrop {
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  border: 2px solid #ffffff;
+  border: 2px solid var(--card);
   box-shadow: 0 0 0 1px var(--line);
 }
 

@@ -4,3 +4,4 @@ desktop.ini
 *.log
 .vscode/
 .idea/
+ledger-backup-*.json

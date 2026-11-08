@@ -21,6 +21,22 @@ const PALETTE = [
   "#355c7d",
 ];
 
+const FREQUENCY_LABELS = {
+  once: "One-time",
+  weekly: "Weekly",
+  biweekly: "Bi-weekly",
+  monthly: "Monthly",
+};
+
+const STREAK_MILESTONES = [
+  { days: 3, title: "3-Day Spark", desc: "Three consecutive days of tracking." },
+  { days: 7, title: "Full Week", desc: "One full week of financial mindfulness." },
+  { days: 14, title: "Bi-weekly Habit", desc: "Two full weeks without missing a beat." },
+  { days: 30, title: "Monthly Master", desc: "30 straight days of logging or checking in." },
+  { days: 60, title: "Steady Saver", desc: "Two months of consistent tracking." },
+  { days: 100, title: "Centurion", desc: "100 consecutive days of clarity." },
+];
+
 const CURRENCY_FORMATTER = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -116,6 +132,13 @@ function addMonths(iso, count) {
   return toISO(new Date(target.getFullYear(), target.getMonth(), Math.min(d, lastDay)));
 }
 
+function nextOccurrenceDate(iso, frequency) {
+  if (frequency === "weekly") return addDays(iso, 7);
+  if (frequency === "biweekly") return addDays(iso, 14);
+  if (frequency === "monthly") return addMonths(iso, 1);
+  return null;
+}
+
 function endOfMonth(iso) {
   const date = parseISO(iso);
   return toISO(new Date(date.getFullYear(), date.getMonth() + 1, 0));
@@ -137,6 +160,10 @@ function rangeFor(period, anchor) {
   if (period === "week") {
     const start = startOfWeek(anchor);
     return { start, end: addDays(start, 6) };
+  }
+  if (period === "biweekly") {
+    const start = startOfWeek(anchor);
+    return { start, end: addDays(start, 13) };
   }
   return monthRange(anchor);
 }
@@ -174,7 +201,7 @@ function periodLabel(period, anchor) {
       day: "numeric",
     });
   }
-  if (period === "week") {
+  if (period === "week" || period === "biweekly") {
     const sameYear = start.slice(0, 4) === end.slice(0, 4);
     const leftOpts = sameYear
       ? { month: "short", day: "numeric" }
@@ -196,15 +223,16 @@ function periodLabel(period, anchor) {
 function shiftAnchor(period, anchor, dir) {
   if (period === "day") return addDays(anchor, dir);
   if (period === "week") return addDays(anchor, dir * 7);
+  if (period === "biweekly") return addDays(anchor, dir * 14);
   return addMonths(anchor, dir);
 }
 
 /* ==========================================================================
-   3. Application State & Persistence
+   3. Application State, Theme & Persistence
    ========================================================================== */
 
 const ui = {
-  view: "log",
+  view: "overview",
   period: "month",
   anchor: todayISO(),
   filter: "all",
@@ -216,6 +244,10 @@ let pendingImport = null;
 
 const main = document.getElementById("main");
 const dialog = document.getElementById("dialog");
+const systemDarkQuery =
+  typeof window !== "undefined" && window.matchMedia
+    ? window.matchMedia("(prefers-color-scheme: dark)")
+    : null;
 
 function blankState() {
   return {
@@ -223,7 +255,11 @@ function blankState() {
     categories: seedCategories(),
     transactions: [],
     debts: [],
-    settings: { monthlyGoalCents: 0 },
+    checkIns: [],
+    settings: {
+      monthlyGoalCents: 0,
+      theme: "system",
+    },
   };
 }
 
@@ -231,15 +267,40 @@ function normalizeState(parsed) {
   if (!parsed || !Array.isArray(parsed.categories) || !Array.isArray(parsed.transactions)) {
     return null;
   }
+  const theme = ["light", "dark", "system"].includes(parsed.settings?.theme)
+    ? parsed.settings.theme
+    : "system";
   return {
     version: 1,
     categories: parsed.categories,
     transactions: parsed.transactions,
     debts: Array.isArray(parsed.debts) ? parsed.debts : [],
+    checkIns: Array.isArray(parsed.checkIns) ? parsed.checkIns : [],
     settings: {
       monthlyGoalCents: Number(parsed.settings?.monthlyGoalCents) || 0,
+      theme,
     },
   };
+}
+
+function resolveTheme(mode) {
+  if (mode === "light" || mode === "dark") return mode;
+  return systemDarkQuery && systemDarkQuery.matches ? "dark" : "light";
+}
+
+function applyTheme() {
+  const mode = state.settings?.theme || "system";
+  const resolved = resolveTheme(mode);
+  document.documentElement.dataset.theme = resolved;
+
+  const metaTheme = document.getElementById("meta-theme-color");
+  if (metaTheme) {
+    metaTheme.setAttribute("content", resolved === "dark" ? "#1c1916" : "#efe4d4");
+  }
+
+  document.querySelectorAll("[data-action='theme']").forEach((btn) => {
+    btn.setAttribute("aria-pressed", String(btn.dataset.themeMode === mode));
+  });
 }
 
 function load() {
@@ -277,13 +338,15 @@ function readImport(file) {
       pendingImport = normalized;
       openConfirm({
         title: "Restore backup?",
-        body: "This replaces the categories, entries, debts, and savings goal currently in this browser.",
+        body: "This replaces the categories, entries, debts, streak check-ins, and settings currently in this browser.",
         confirmLabel: "Restore",
         danger: true,
         onConfirm: () => {
           state = pendingImport;
           pendingImport = null;
+          syncRecurringTransactions();
           save();
+          applyTheme();
           closeDialog();
           render();
         },
@@ -302,7 +365,7 @@ function readImport(file) {
 }
 
 /* ==========================================================================
-   4. Domain Selectors & Financial Logic
+   4. Domain Selectors, Bi-Weekly Recurrence & Streak Logic
    ========================================================================== */
 
 function categoryById(id) {
@@ -347,7 +410,8 @@ function visibleTransactions() {
     if (ui.filter !== "all" && tx.type !== ui.filter) return false;
     if (!query) return true;
     const category = categoryById(tx.categoryId);
-    const haystack = `${category?.name || ""} ${tx.note || ""}`.toLowerCase();
+    const freqLabel = tx.frequency && tx.frequency !== "once" ? FREQUENCY_LABELS[tx.frequency] || "" : "";
+    const haystack = `${category?.name || ""} ${tx.note || ""} ${freqLabel}`.toLowerCase();
     return haystack.includes(query);
   });
 }
@@ -372,6 +436,10 @@ function comparison() {
     prevStart = addDays(start, -7);
     prevEnd = addDays(end, -7);
     label = "last week";
+  } else if (ui.period === "biweekly") {
+    prevStart = addDays(start, -14);
+    prevEnd = addDays(end, -14);
+    label = "the previous two weeks";
   } else {
     const today = todayISO();
     const isCurrentMonth = today.slice(0, 7) === start.slice(0, 7);
@@ -408,6 +476,96 @@ function defaultEntryDate() {
   const today = todayISO();
   if (today >= start && today <= end) return today;
   return ui.period === "month" ? end : start;
+}
+
+/**
+ * Automatically materializes due recurring transactions (e.g. bi-weekly, weekly, monthly)
+ * up through today so recurring paychecks/bills appear automatically.
+ */
+function syncRecurringTransactions() {
+  const today = todayISO();
+  let added = false;
+
+  const recurringRoots = state.transactions.filter(
+    (tx) => tx.frequency && tx.frequency !== "once" && !tx.recoupled
+  );
+
+  recurringRoots.forEach((source) => {
+    let nextDate = nextOccurrenceDate(source.date, source.frequency);
+    let safety = 0;
+    while (nextDate && nextDate <= today && safety < 52) {
+      safety += 1;
+      const alreadySpawned = state.transactions.some(
+        (item) =>
+          (item.parentId === (source.parentId || source.id) || item.id === (source.parentId || source.id)) &&
+          item.date === nextDate
+      );
+      if (!alreadySpawned) {
+        state.transactions.push({
+          id: uid(),
+          createdAt: new Date().toISOString(),
+          date: nextDate,
+          amountCents: source.amountCents,
+          categoryId: source.categoryId,
+          note: source.note,
+          type: source.type,
+          frequency: source.frequency,
+          parentId: source.parentId || source.id,
+          debtId: null,
+        });
+        added = true;
+      }
+      nextDate = nextOccurrenceDate(nextDate, source.frequency);
+    }
+  });
+
+  if (added) save();
+}
+
+function activeDatesSet() {
+  const dates = new Set();
+  state.transactions.forEach((tx) => {
+    if (tx.date) dates.add(tx.date);
+  });
+  (state.checkIns || []).forEach((iso) => {
+    if (iso) dates.add(iso);
+  });
+  return dates;
+}
+
+function computeStreakStats() {
+  const dates = activeDatesSet();
+  const today = todayISO();
+  const yesterday = addDays(today, -1);
+
+  let current = 0;
+  let cursor = dates.has(today) ? today : dates.has(yesterday) ? yesterday : null;
+  while (cursor && dates.has(cursor)) {
+    current += 1;
+    cursor = addDays(cursor, -1);
+  }
+
+  const sorted = [...dates].sort();
+  let longest = 0;
+  let run = 0;
+  let prev = null;
+  sorted.forEach((iso) => {
+    if (prev && addDays(prev, 1) === iso) {
+      run += 1;
+    } else {
+      run = 1;
+    }
+    if (run > longest) longest = run;
+    prev = iso;
+  });
+
+  return {
+    current,
+    longest,
+    totalDays: dates.size,
+    checkedInToday: dates.has(today),
+    dates,
+  };
 }
 
 function payoffPlan(debt) {
@@ -490,8 +648,10 @@ function upsertTransaction(existing, data) {
   record.categoryId = data.categoryId;
   record.note = data.note;
   record.type = data.type;
+  record.frequency = data.frequency || "once";
   record.debtId = data.type === "expense" ? data.debtId || null : null;
   if (!existing) state.transactions.push(record);
+  syncRecurringTransactions();
   return "";
 }
 
@@ -500,9 +660,10 @@ function upsertTransaction(existing, data) {
    ========================================================================== */
 
 const PAGE_RENDERERS = {
-  log: renderLog,
   overview: renderOverview,
+  log: renderLog,
   debts: renderDebts,
+  streak: renderStreak,
   categories: renderCategories,
 };
 
@@ -516,7 +677,9 @@ function render() {
     else button.removeAttribute("aria-current");
   });
 
-  const renderPage = PAGE_RENDERERS[ui.view] || renderLog;
+  applyTheme();
+
+  const renderPage = PAGE_RENDERERS[ui.view] || renderOverview;
   main.innerHTML = renderPage() + renderFooter();
 
   if (activeId) {
@@ -553,7 +716,14 @@ function renderLog() {
   const left = income - spent;
   const tone = income === 0 ? "" : left >= 0 ? "good" : "bad";
   const third = income === 0 ? statCard("Left over", 0, "", "—") : statCard("Left over", left, tone);
-  const word = ui.period === "day" ? "day" : ui.period === "week" ? "week" : "month";
+  const word =
+    ui.period === "day"
+      ? "day"
+      : ui.period === "week"
+        ? "week"
+        : ui.period === "biweekly"
+          ? "two-week stretch"
+          : "month";
   const emptyCopy =
     all.length > 0 && rows.length === 0
       ? "No entries match your search or filter."
@@ -564,7 +734,7 @@ function renderLog() {
       <div class="page-head">
         <div>
           <h2>Expenses</h2>
-          <p class="lede">Log what comes in and what goes out. Switch the view to a day, a week, or a month.</p>
+          <p class="lede">Log what comes in and what goes out. Switch the view to a day, week, bi-weekly, or month.</p>
         </div>
         <div class="controls">${periodSwitch()}</div>
       </div>
@@ -591,10 +761,15 @@ function renderLog() {
 }
 
 function periodSwitch() {
-  const buttons = ["day", "week", "month"]
-    .map((period) => {
+  const periods = [
+    ["day", "Day"],
+    ["week", "Week"],
+    ["biweekly", "Bi-weekly"],
+    ["month", "Month"],
+  ];
+  const buttons = periods
+    .map(([period, label]) => {
       const on = ui.period === period;
-      const label = period[0].toUpperCase() + period.slice(1);
       return `<button type="button" data-action="period" data-period="${period}" aria-pressed="${on}">${label}</button>`;
     })
     .join("");
@@ -645,11 +820,15 @@ function renderSeries() {
       const label =
         ui.period === "week"
           ? parseISO(day).toLocaleDateString("en-US", { weekday: "narrow" })
-          : ui.period === "month"
-            ? dayNum === 1 || dayNum % 7 === 1
+          : ui.period === "biweekly"
+            ? index % 2 === 0
               ? String(dayNum)
               : ""
-            : String(dayNum);
+            : ui.period === "month"
+              ? dayNum === 1 || dayNum % 7 === 1
+                ? String(dayNum)
+                : ""
+              : String(dayNum);
       const shown = totals[index] > 0 ? Math.max(height, 8) : 0;
       const title = esc(`${formatDay(day)} · ${money(totals[index])}`);
       return `
@@ -725,12 +904,16 @@ function txRow(tx) {
   const noteText = esc(tx.note || (tx.type === "income" ? "Income" : "Expense"));
   const dateSuffix = ui.period === "day" ? "" : ` · ${esc(formatDay(tx.date))}`;
   const amtClass = tx.type === "income" ? "tx-amt income" : "tx-amt";
+  const freqBadge =
+    tx.frequency && tx.frequency !== "once" && FREQUENCY_LABELS[tx.frequency]
+      ? `<span class="badge-pill">${esc(FREQUENCY_LABELS[tx.frequency])}</span>`
+      : "";
 
   return `
     <article class="tx">
       <span class="dot" style="background:${color}"></span>
       <div>
-        <div class="tx-title">${esc(name)}</div>
+        <div class="tx-title">${esc(name)}${freqBadge}</div>
         <div class="tx-meta">${noteText}${dateSuffix}</div>
       </div>
       <div class="tx-side">
@@ -894,6 +1077,76 @@ function debtCard(debt) {
   `;
 }
 
+function renderStreak() {
+  const { current, longest, totalDays, checkedInToday, dates } = computeStreakStats();
+  const today = todayISO();
+  const endWeek = addDays(startOfWeek(today), 6);
+  const startGrid = addDays(endWeek, -27);
+  const gridDays = eachDay(startGrid, endWeek);
+  const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    .map((day) => `<div class="streak-weekday">${day}</div>`)
+    .join("");
+
+  const cells = gridDays
+    .map((iso) => {
+      const active = dates.has(iso);
+      const isToday = iso === today;
+      const dayNum = Number(iso.slice(8, 10));
+      const cls = `streak-day${active ? " active" : ""}${isToday ? " today" : ""}`;
+      const label = `${formatDay(iso)}${active ? " · Logged" : ""}`;
+      return `<div class="${cls}" title="${esc(label)}"><span>${dayNum}</span></div>`;
+    })
+    .join("");
+
+  const milestones = STREAK_MILESTONES.map((m) => {
+    const unlocked = longest >= m.days;
+    return `
+      <div class="milestone${unlocked ? " unlocked" : ""}">
+        <div>
+          <strong>${esc(m.title)}</strong>
+          <div class="tx-meta">${esc(m.desc)}</div>
+        </div>
+        <span class="badge-pill">${unlocked ? "Unlocked" : `${m.days} days`}</span>
+      </div>
+    `;
+  }).join("");
+
+  const checkInAction = checkedInToday
+    ? `<span class="badge-pill">Checked in for today</span>`
+    : `<button class="primary" type="button" data-action="checkin-today">Check in today (no-spend)</button>`;
+
+  return `
+    <section>
+      <div class="page-head">
+        <div>
+          <h2>Streak</h2>
+          <p class="lede">Build a daily habit of tracking your spending or checking in on no-spend days.</p>
+        </div>
+        <div class="controls">${checkInAction}</div>
+      </div>
+      <div class="stats">
+        ${statCard("Current streak", 0, current > 0 ? "good" : "", `${current} ${current === 1 ? "day" : "days"}`)}
+        ${statCard("Longest streak", 0, "", `${longest} ${longest === 1 ? "day" : "days"}`)}
+        ${statCard("Active days", 0, "", `${totalDays} ${totalDays === 1 ? "day" : "days"}`)}
+      </div>
+      <div class="layout">
+        <div class="card">
+          <h3>Last 4 weeks</h3>
+          <p class="hint">Days light up when you log an entry or record a no-spend check-in.</p>
+          <div class="streak-calendar">
+            ${weekdays}
+            ${cells}
+          </div>
+        </div>
+        <aside class="card">
+          <h3>Milestones</h3>
+          <div class="milestone-list">${milestones}</div>
+        </aside>
+      </div>
+    </section>
+  `;
+}
+
 function renderCategories() {
   const group = (kind, title) => {
     const items = categoriesOf(kind)
@@ -986,6 +1239,15 @@ function categoryOptions(kind, selectedId) {
     .join("");
 }
 
+function frequencyOptions(selectedFreq = "once") {
+  return Object.entries(FREQUENCY_LABELS)
+    .map(
+      ([value, label]) =>
+        `<option value="${value}"${value === selectedFreq ? " selected" : ""}>${esc(label)}</option>`
+    )
+    .join("");
+}
+
 function colorPicker(selected) {
   const current = PALETTE.includes(selected) ? selected : PALETTE[0];
   const swatches = PALETTE.map(
@@ -1005,9 +1267,11 @@ function openTransactionDialog(existing) {
     amountCents: 0,
     date: defaultEntryDate(),
     categoryId: "",
+    frequency: "once",
     note: "",
   };
   const selected = tx.categoryId || categoriesOf(tx.type)[0]?.id || "";
+  const selectedFreq = tx.frequency || "once";
 
   openDialog(`
     <h2 id="dialog-title">${existing ? "Edit entry" : "Add entry"}</h2>
@@ -1028,13 +1292,19 @@ function openTransactionDialog(existing) {
           <input name="date" type="date" required value="${esc(tx.date)}" />
         </label>
       </div>
-      <label class="field">
-        <span>Category</span>
-        <select name="category" id="tx-category">${categoryOptions(tx.type, selected)}</select>
-      </label>
+      <div class="row2">
+        <label class="field">
+          <span>Category</span>
+          <select name="category" id="tx-category">${categoryOptions(tx.type, selected)}</select>
+        </label>
+        <label class="field">
+          <span>Frequency</span>
+          <select name="frequency" id="tx-frequency">${frequencyOptions(selectedFreq)}</select>
+        </label>
+      </div>
       <label class="field">
         <span>Note</span>
-        <input name="note" maxlength="140" value="${esc(tx.note || "")}" placeholder="Store, bill, or paycheck" />
+        <input name="note" maxlength="140" value="${esc(tx.note || "")}" placeholder="Store, bill, or bi-weekly paycheck" />
       </label>
       <div class="dialog-actions">
         <button class="ghost" type="button" data-action="close-dialog">Cancel</button>
@@ -1200,12 +1470,14 @@ function handleTransactionSubmit(event) {
   const category = categoryById(categoryId);
   const type = dialog.dataset.txType || "expense";
   if (!category || category.kind !== type) return showFormError("Choose a category.");
+  const frequency = form.frequency && FREQUENCY_LABELS[form.frequency.value] ? form.frequency.value : "once";
 
   const existing = state.transactions.find((tx) => tx.id === dialog.dataset.txId);
   const error = upsertTransaction(existing, {
     amountCents: amount,
     date,
     categoryId,
+    frequency,
     note: form.note.value.trim(),
     type,
     debtId: existing ? existing.debtId : null,
@@ -1326,6 +1598,7 @@ function handlePaymentSubmit(event) {
     amountCents: amount,
     date,
     categoryId: debtPaymentCategoryId(),
+    frequency: "once",
     note: form.note.value.trim(),
     type: "expense",
     debtId: debt.id,
@@ -1353,6 +1626,23 @@ const ACTION_HANDLERS = {
     ui.view = button.dataset.view;
     closeDialog();
     render();
+  },
+  theme(button) {
+    const mode = button.dataset.themeMode;
+    if (["light", "dark", "system"].includes(mode)) {
+      state.settings.theme = mode;
+      save();
+      applyTheme();
+    }
+  },
+  "checkin-today"() {
+    const today = todayISO();
+    if (!Array.isArray(state.checkIns)) state.checkIns = [];
+    if (!state.checkIns.includes(today)) {
+      state.checkIns.push(today);
+      save();
+      render();
+    }
   },
   period(button) {
     ui.period = button.dataset.period;
@@ -1530,6 +1820,14 @@ function onChange(event) {
   }
 }
 
+if (systemDarkQuery && systemDarkQuery.addEventListener) {
+  systemDarkQuery.addEventListener("change", () => {
+    if ((state.settings?.theme || "system") === "system") {
+      applyTheme();
+    }
+  });
+}
+
 document.body.addEventListener("click", onClick);
 document.body.addEventListener("submit", onSubmit);
 document.body.addEventListener("input", onInput);
@@ -1540,4 +1838,6 @@ dialog.addEventListener("cancel", (event) => {
 });
 
 load();
+syncRecurringTransactions();
+applyTheme();
 render();

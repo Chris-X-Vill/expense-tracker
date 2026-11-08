@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="description" content="Ledger — Personal expense log, budget overview, and debt payoff planner." />
-  <meta name="theme-color" content="#efe4d4" />
+  <meta name="theme-color" content="#efe4d4" id="meta-theme-color" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Ledger" />
@@ -27,11 +27,34 @@
           <h1>Ledger</h1>
         </div>
       </div>
-      <button class="primary" type="button" data-action="add-transaction">Add entry</button>
+      <div class="topbar-actions">
+        <div class="theme-switch" role="group" aria-label="Color theme">
+          <button type="button" class="theme-btn" data-action="theme" data-theme-mode="light" title="Light mode" aria-label="Light mode">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+            </svg>
+          </button>
+          <button type="button" class="theme-btn" data-action="theme" data-theme-mode="dark" title="Dark mode" aria-label="Dark mode">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+          </button>
+          <button type="button" class="theme-btn" data-action="theme" data-theme-mode="system" title="System mode" aria-label="System mode">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+              <line x1="8" y1="21" x2="16" y2="21"></line>
+              <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+          </button>
+        </div>
+        <button class="primary" type="button" data-action="add-transaction">Add entry</button>
+      </div>
       <nav class="nav" aria-label="Sections">
-        <button type="button" data-action="view" data-view="log">Expenses</button>
         <button type="button" data-action="view" data-view="overview">Overview</button>
+        <button type="button" data-action="view" data-view="log">Expenses</button>
         <button type="button" data-action="view" data-view="debts">Debts</button>
+        <button type="button" data-action="view" data-view="streak">Streak</button>
         <button type="button" data-action="view" data-view="categories">Categories</button>
       </nav>
     </header>
